@@ -1,0 +1,10 @@
+{application, chat_server,
+ [
+  {description, "A simple TCP/IP chat server"},
+  {vsn, "0.1.0"},
+  {mod, {server, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]}
+ ]}.
