@@ -31,7 +31,8 @@ handle_client(Socket) ->
       io:format("[~p] received `~s`~n", [Socket, UserInput]),
       Reply = handle_user_input(UserInput, Socket),
       io:format("[~p] responding `~s`~n", [Socket, Reply]),
-      BinReply = binary:list_to_bin(Reply),
+      FormattedReply = io_lib:format("[server] ~s", [Reply]),
+      BinReply = binary:list_to_bin(FormattedReply),
       gen_tcp:send(Socket, BinReply),
       handle_client(Socket);
     {tcp_closed, Socket} ->
@@ -39,12 +40,31 @@ handle_client(Socket) ->
       io:format("[~p] socket closed~n", [Socket])
   end.
 
+call(Command, Args) ->
+  gen_server:call(ets_server, {Command, Args}).
+
 handle_user_input(UserInput, Socket) ->
   Command = string:tokens(UserInput, " "),
   case Command of
-    ["whoami"] -> user_handler:whoami(Socket);
-    ["login", User] -> user_handler:login(User, Socket);
-    ["logout"] -> user_handler:logout(Socket);
-    _ -> "[server] unknown command"
+    ["whoami"] ->
+      case call(whoami, Socket) of
+        nil -> "you are not logged in!";
+        User -> io_lib:format("~s", [User])
+      end;
+    ["login", User] ->
+      case call(login, {Socket, User}) of
+        ok -> io_lib:format("hello, ~s!", [User]);
+        {error, name_taken} ->
+          io_lib:format("~s is already logged in", [User]);
+        {error, already_logged_in} ->
+          "you are already logged in!"
+      end;
+    ["logout"] ->
+      case call(logout, Socket) of
+        ok -> io_lib:format("bye!", []);
+        error -> "you are not logged in!"
+      end;
+    _ ->
+      "unknown command"
   end.
 
