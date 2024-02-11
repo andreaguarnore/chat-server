@@ -2,41 +2,42 @@
 
 -export([whoami/1, login/1, logout/1]).
 
+-include("records.hrl").
+
 whoami(Socket) ->
   case ets:lookup(sessions, Socket) of
-    [] -> nil;
-    [{_, User}] -> User
+    [{_Socket, User}] -> {ok, User};
+    [] -> {error, not_logged_in}
   end.
 
-login({Socket, User}) ->
+login({Socket, UserName}) ->
   case whoami(Socket) of
-    nil ->
-      [{_, Users}] = ets:lookup(state, users),
-      case lists:member(User, Users) of
-        true ->
-          {error, name_taken};
+    {error, not_logged_in} ->
+      [{_Socket, UserNames}] = ets:lookup(state, usernames),
+      case lists:member(UserName, UserNames) of
         false ->
-          ets:insert(sessions, {Socket, User}),
-          ets:insert(state, {users, [User | Users]}),
-          ok
+          ets:insert(sessions, {Socket, #user{name=UserName}}),
+          ets:insert(state, {usernames, [UserName | UserNames]}),
+          ok;
+        true ->
+          {error, name_taken}
       end;
-    _ ->
-      {error, already_logged_in}
+    {ok, _} -> {error, already_logged_in}
   end.
 
 logout(Socket) ->
   case whoami(Socket) of
-    nil ->
-      error;
-    User ->
-      [{_, Users}] = ets:lookup(state, users),
-      case lists:member(User, Users) of
+    {ok, #user{name=UserName}} ->
+      [{_Socket, UserNames}] = ets:lookup(state, usernames),
+      case lists:member(UserName, UserNames) of
         true ->
+          _ = room_handler:leave(Socket), % leave current room, if any
           ets:delete(sessions, Socket),
-          ets:insert(state, {users, lists:delete(User, Users)}),
+          ets:insert(state, {usernames, lists:delete(UserName, UserNames)}),
           ok;
         false ->
-          error
-      end
+          {error, already_logged_in}
+      end;
+    {error, not_logged_in} -> {error, not_logged_in}
   end.
 
