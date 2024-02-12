@@ -30,7 +30,8 @@ read_input(Socket) ->
       io:format("basic commands" ++
                 "\n  /help" ++
                 "\n  /quit" ++
-                "\n  <message> to send a message" ++
+                "\n  <message>            to send a message" ++
+                "\n  /pm <user> <message> to send a private message" ++
                 "\n\nuser commands"
                 "\n  /whoami" ++
                 "\n  /login <username>" ++

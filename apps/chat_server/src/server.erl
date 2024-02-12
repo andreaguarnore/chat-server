@@ -31,7 +31,8 @@ handle_client(Socket) ->
       io:format("[~p] received `~s`~n", [Socket, UserInput]),
       Handler = case hd(UserInput) of
         $/ -> fun handle_command/2;
-        _ -> fun handle_message/2
+        _ -> fun handle_message/2 % user inputs not starting with '/' are
+                                  % considered room messages
       end,
       case Handler(Socket, UserInput) of
         ok -> handle_client(Socket);
@@ -99,20 +100,28 @@ handle_command(Socket, UserInput) ->
       end;
     ["/room", "join", RoomName] ->
       case call(room_join, {Socket, RoomName}) of
-        ok -> {ok, io_lib:format("joined room `~s`", [RoomName])};
+        ok -> ok;
         {error, not_found} -> {error, io_lib:format("room `~s` was not found", [RoomName])};
-        {error, in_another_room} -> {error, "you have to leave this room first"};
         {error, not_logged_in} -> {error, "you are not logged in!"}
       end;
     ["/room", "leave"] ->
       case call(room_leave, Socket) of
-        {ok, _RoomName} -> ok;
+        ok -> ok;
         {error, not_in_a_room} -> {error, "you are not in a room!"};
         {error, not_logged_in} -> {error, "you are not logged in!"}
       end;
 
+    % private messaging
+    ["/pm", Receiver | TokenizedMsg] ->
+      Msg = string:join(TokenizedMsg, " "),
+      case call(pm, {Socket, Receiver, Msg}) of
+        ok -> ok;
+        {error, not_logged_in} -> {error, "you are not logged in!"};
+        {error, not_found} -> {error, io_lib:format("user `~s` is not logged in!", [Receiver])}
+      end;
+
     % unknown command
-    _ -> {ok, "unknown command"}
+    _ -> {error, "unknown command"}
 
   end.
 
@@ -122,5 +131,4 @@ handle_message(Socket, Msg) ->
     {error, not_in_a_room} -> {error, "you are not in a room!"};
     {error, not_logged_in} -> {error, "you are not logged in!"}
   end.
-
 

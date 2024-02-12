@@ -29,6 +29,52 @@ delete({Socket, RoomName}) ->
     {error, not_logged_in} -> {error, not_logged_in}
   end.
 
+list(Socket) ->
+  case user_handler:whoami(Socket) of
+    {ok, #user{name=UserName}} ->
+      Func = fun(Room, Acc) -> [room_to_string(UserName, Room) | Acc] end,
+      {ok, ets:foldl(Func, [], rooms)};
+    {error, not_logged_in} -> {error, not_logged_in}
+  end.
+
+join({Socket, RoomName}) ->
+  case user_handler:whoami(Socket) of
+    {ok, #user{name=UserName, room=nil}} -> % the user is not in another room
+      case ets:lookup(rooms, RoomName) of
+        [{_RoomName, Room}] -> add_user_to_room(Socket, UserName, RoomName, Room);
+        [] -> {error, not_found}
+      end;
+    {ok, #user{name=UserName, room=CurrentRoomName}} -> % the user is in another room
+      case ets:lookup(rooms, RoomName) of
+        [{_NewRoomName, NewRoom}] ->
+          [{_RoomName, CurrentRoom}] = ets:lookup(rooms, CurrentRoomName),
+          remove_user_from_room(Socket, UserName, CurrentRoomName, CurrentRoom),
+          add_user_to_room(Socket, UserName, RoomName, NewRoom);
+        [] -> {error, not_found}
+      end;
+    {error, not_logged_in} -> {error, not_logged_in}
+  end.
+
+leave(Socket) ->
+  case user_handler:whoami(Socket) of
+    {ok, #user{name=UserName, room=RoomName}} when RoomName /= nil ->
+      [{_RoomName, Room}] = ets:lookup(rooms, RoomName),
+      remove_user_from_room(Socket, UserName, RoomName, Room);
+    {ok, _} -> {error, not_in_a_room};
+    {error, not_logged_in} -> {error, not_logged_in}
+  end.
+
+% pretty print a room
+room_to_string(CurrentUserName, {RoomName, Room}) ->
+  Owner = case Room#room.owner of
+    CurrentUserName -> "[owner]";
+    _ -> ""
+  end,
+  FormatArgs = [RoomName, Room#room.type,
+                length(Room#room.participants), Owner],
+  io_lib:format("~s (~s, ~B participants) ~s", FormatArgs).
+
+% assumes that the room exists
 delete_room(RoomName, Room) ->
   % broadcast a message to all participants in the room
   RoomSockets = [Socket || {Socket, _UserName} <- Room#room.participants],
@@ -42,50 +88,32 @@ delete_room(RoomName, Room) ->
   lists:map(Func, Room#room.participants),
 
   % delete the room
-  ets:delete(rooms, Room),
+  ets:delete(rooms, RoomName),
   ok.
 
-list(Socket) ->
-  case user_handler:whoami(Socket) of
-    {ok, #user{name=UserName}} ->
-      Func = fun(Room, Acc) -> [room_to_string(UserName, Room) | Acc] end,
-      {ok, ets_utils:set_fold(Func, [], rooms)};
-    {error, not_logged_in} -> {error, not_logged_in}
-  end.
+% assumes that the user exists and
+% that they are not in another room;
+% additionally, it broadcasts a message to all participants
+add_user_to_room(UserSocket, UserName, RoomName, Room) ->
+  Participants = [{UserSocket, UserName} | Room#room.participants],
+  ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
+  ets:insert(sessions, {UserSocket, #user{name=UserName, room=RoomName}}),
+  messaging_handler:send_message_to_room(UserSocket,
+                                         UserName,
+                                         "joined the room",
+                                         Room),
+  ok.
 
-room_to_string(CurrentUserName, {RoomName, Room}) ->
-  Owner = case Room#room.owner of
-    CurrentUserName -> "[owner]";
-    _ -> ""
-  end,
-  FormatArgs = [RoomName, Room#room.type,
-                length(Room#room.participants), Owner],
-  io_lib:format("~s (~s, ~B participants) ~s", FormatArgs).
-
-join({Socket, RoomName}) ->
-  case user_handler:whoami(Socket) of
-    {ok, #user{name=UserName, room=nil}} ->
-      case ets:lookup(rooms, RoomName) of
-        [{_RoomName, Room}] ->
-          Participants = [{Socket, UserName} | Room#room.participants],
-          ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
-          ets:insert(sessions, {Socket, #user{name=UserName, room=RoomName}}),
-          ok;
-        [] -> {error, not_found}
-      end;
-    {ok, _} -> {error, in_another_room};
-    {error, not_logged_in} -> {error, not_logged_in}
-  end.
-
-leave(Socket) ->
-  case user_handler:whoami(Socket) of
-    {ok, #user{name=UserName, room=RoomName}} when RoomName /= nil ->
-      [{_RoomName, Room}] = ets:lookup(rooms, RoomName), % assume it exists
-      Participants = lists:delete({Socket, UserName}, Room#room.participants),
-      ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
-      ets:insert(sessions, {Socket, #user{name=UserName, room=nil}}),
-      {ok, RoomName};
-    {ok, _} -> {error, not_in_a_room};
-    {error, not_logged_in} -> {error, not_logged_in}
-  end.
+% assumes that the user exists and,
+% if also the room exists, then the user is in it
+% additionally, it broadcasts a message to all participants
+remove_user_from_room(UserSocket, UserName, RoomName, Room) ->
+  messaging_handler:send_message_to_room(UserSocket,
+                                         UserName,
+                                         "left the room",
+                                         Room),
+  Participants = lists:delete({UserSocket, UserName}, Room#room.participants),
+  ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
+  ets:insert(sessions, {UserSocket, #user{name=UserName, room=nil}}),
+  ok.
 

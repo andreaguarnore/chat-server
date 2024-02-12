@@ -37,7 +37,9 @@ handle_call({room_leave, Args}, _From, State) ->
 
 % messaging commands
 handle_call({room_message, Args}, _From, State) ->
-  {reply, messaging_handler:room_message(Args), State}.
+  {reply, messaging_handler:room_message(Args), State};
+handle_call({pm, Args}, _From, State) ->
+  {reply, messaging_handler:private_message(Args), State}.
 
 % unused callbacks
 handle_cast(_Msg, State) -> {noreply, State}.

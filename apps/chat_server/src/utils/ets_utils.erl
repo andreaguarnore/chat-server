@@ -1,17 +1,24 @@
 -module(ets_utils).
 
--export([set_fold/3]).
+-export([first/2]).
 
-% fold on an ets set
-set_fold(Func, Acc, Table) ->
+% returns {ok, <elem>},       where <elem> is the first element on which the
+%                             predicate returns `true`, or
+%         {error, not_found}, otherwise
+first(Func, Table) ->
   FirstKey = ets:first(Table),
-  set_fold(Func, Acc, Table, FirstKey).
+  first(Func, Table, FirstKey).
 
-set_fold(Func, Acc, Table, CurrentKey) ->
+first(Func, Table, CurrentKey) ->
   case ets:lookup(Table, CurrentKey) of
-    [] -> Acc;
-    [{_, Value}] ->
-      NextKey = ets:next(Table, CurrentKey),
-      set_fold(Func, Func({CurrentKey, Value}, Acc), Table, NextKey)
+    [] -> {error, not_found};
+    [KeyValuePair] ->
+      case Func(KeyValuePair) of
+        true -> {ok, KeyValuePair};
+        false ->
+          NextKey = ets:next(Table, CurrentKey),
+          first(Func, Table, NextKey)
+      end
   end.
+
 
