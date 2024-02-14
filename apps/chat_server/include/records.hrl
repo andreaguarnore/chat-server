@@ -1,8 +1,5 @@
 -record(user, {name,
-               room=nil}). % current room of the user, or `nil`
-
--record(userroom, {type, % can be either `public` or `private`
-                   name}).
+               room=nil}). % name of the current room of the user, or `nil`
 
 -record(room, {owner,             % the room creator
                type=public,       % either `public` or `private`

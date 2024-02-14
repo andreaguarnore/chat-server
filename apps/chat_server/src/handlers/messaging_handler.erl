@@ -7,7 +7,7 @@
 
 room_message({Socket, Msg}) ->
   case user_handler:whoami(Socket) of
-    {ok, #user{name=UserName, room=RoomName}} when RoomName /= nil ->
+    {ok, #user{name=UserName, room=RoomName}} when RoomName /= nil -> % user in a room
       [{_RoomName, Room}] = ets:lookup(rooms, RoomName), % assume it exists
       send_message_to_room(Socket, UserName, Msg, Room);
     {ok, #user{name=_UserName, room=nil}} -> {error, not_in_a_room};
@@ -17,7 +17,8 @@ room_message({Socket, Msg}) ->
 private_message({Socket, Receiver, Msg}) ->
   case user_handler:whoami(Socket) of
     {ok, #user{name=SenderUserName}} ->
-      ReceiverPredicate = fun({_, User}) -> User#user.name == Receiver end,
+      % find receiver in sessions
+      ReceiverPredicate = fun({_Socket, User}) -> User#user.name == Receiver end,
       case ets_utils:first(ReceiverPredicate, sessions) of
         {ok, {ReceiverSocket, _}} ->
           FormattedSender = io_lib:format("~s via pm", [SenderUserName]),

@@ -4,13 +4,15 @@
 
 -export([start/2, stop/1]).
 
--include_lib("shared_include/constants.hrl").
+-include("records.hrl").
 
 start(_StartType, _StartArgs) ->
-  {ok, LSocket} = gen_tcp:listen(?PORT, [binary,
-                                         {packet, 0},
-                                         {reuseaddr, true},
-                                         {active, true}]),
+  {ok, Port} = application:get_env(port),
+  io:format("listening on port ~B~n", [Port]),
+  {ok, LSocket} = gen_tcp:listen(Port, [binary,
+                                        {packet, 0},
+                                        {reuseaddr, true},
+                                        {active, true}]),
   spawn(fun() -> accept_client(LSocket) end),
   ets_server:start_link(),
   {ok, LSocket}.
@@ -47,7 +49,8 @@ handle_client(Socket) ->
       end;
     {tcp_closed, Socket} ->
       _ = user_handler:logout(Socket),
-      io:format("[~p] socket closed~n", [Socket])
+      io:format("[~p] socket closed~n", [Socket]),
+      ok
   end.
 
 call(Command, Args) ->
@@ -60,7 +63,7 @@ handle_command(Socket, UserInput) ->
     % user commands
     ["/whoami"] ->
       case call(whoami, Socket) of
-        {ok, {UserName, _}} -> {ok, io_lib:format("~s", [UserName])};
+        {ok, User} -> {ok, io_lib:format("~s", [User#user.name])};
         {error, not_logged_in} -> {error, "you are not logged in!"}
       end;
     ["/login", UserName] ->
@@ -78,6 +81,12 @@ handle_command(Socket, UserInput) ->
     % room commands
     ["/room", "create", RoomName] ->
       case call(room_create, {Socket, RoomName}) of
+        ok -> ok;
+        {error, not_logged_in} -> {error, "you are not logged in!"};
+        {error, name_taken} -> {error, io_lib:format("room `~s` already exists", [RoomName])}
+      end;
+    ["/room", "createp", RoomName | Members] ->
+      case call(room_createp, {Socket, RoomName, Members}) of
         ok -> ok;
         {error, not_logged_in} -> {error, "you are not logged in!"};
         {error, name_taken} -> {error, io_lib:format("room `~s` already exists", [RoomName])}

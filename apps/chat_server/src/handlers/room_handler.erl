@@ -1,6 +1,6 @@
 -module(room_handler).
 
--export([create/1, delete/1, list/1, join/1, leave/1]).
+-export([create/1, createp/1, delete/1, list/1, join/1, leave/1]).
 
 -include("records.hrl").
 
@@ -12,6 +12,30 @@ create({Socket, RoomName}) ->
           Room = #room{owner=UserName},
           ets:insert(rooms, {RoomName, Room}),
           ok;
+        % in theory, if there is a private room by the same name, this will
+        % return `name_taken`, even if the user should not be able to see
+        % such room
+        [{_RoomName, _Room}] -> {error, name_taken}
+      end;
+    {error, not_logged_in} -> {error, not_logged_in}
+  end.
+
+createp({Socket, RoomName, Members}) ->
+  case user_handler:whoami(Socket) of
+    {ok, #user{name=UserName}} ->
+      % take the sockets of all (unique) members (including the creator)
+      AllMembers = sets:from_list([UserName | Members]),
+      Func = fun({_CandidateSocket, CandidateUser}) ->
+               sets:is_element(CandidateUser#user.name, AllMembers)
+             end,
+      AvailableMembers = [{MemberSocket, Member#user.name} ||
+          {MemberSocket, Member} <- ets_utils:filter(Func, sessions)],
+      % add all (existing) given users as members to the new room
+      case ets:lookup(rooms, RoomName) of
+        [] ->
+          Room = #room{owner=UserName, type=private, members=AvailableMembers},
+          ets:insert(rooms, {RoomName, Room}),
+          ok;
         [{_RoomName, _Room}] -> {error, name_taken}
       end;
     {error, not_logged_in} -> {error, not_logged_in}
@@ -21,8 +45,7 @@ delete({Socket, RoomName}) ->
   case user_handler:whoami(Socket) of
     {ok, #user{name=UserName}} ->
       case ets:lookup(rooms, RoomName) of
-        [{_, Room}] when Room#room.owner == UserName ->
-          delete_room(RoomName, Room);
+        [{_, Room}] when Room#room.owner == UserName -> delete_room(RoomName, Room);
         [{_, _}] -> {error, unauthorized};
         [] -> {error, not_found}
       end;
@@ -32,24 +55,46 @@ delete({Socket, RoomName}) ->
 list(Socket) ->
   case user_handler:whoami(Socket) of
     {ok, #user{name=UserName}} ->
-      Func = fun(Room, Acc) -> [room_to_string(UserName, Room) | Acc] end,
+      % fold on the rooms to retrieve a list of strings where
+      % each element contains information about a room; skip
+      % rooms where the user is not a member
+      Func = fun({RoomName, Room}, Acc) ->
+               if
+                 Room#room.type == public -> % public room
+                   [room_to_string(UserName, {RoomName, Room}) | Acc];
+                 true -> % private room -> check if the current user is a member
+                   case lists:member({Socket, UserName}, Room#room.members) of
+                     true -> [room_to_string(UserName, {RoomName, Room}) | Acc];
+                     false -> Acc
+                   end
+               end
+             end,
       {ok, ets:foldl(Func, [], rooms)};
     {error, not_logged_in} -> {error, not_logged_in}
   end.
 
 join({Socket, RoomName}) ->
   case user_handler:whoami(Socket) of
-    {ok, #user{name=UserName, room=nil}} -> % the user is not in another room
+    {ok, #user{name=UserName, room=nil}} -> % the user is not in a room
       case ets:lookup(rooms, RoomName) of
-        [{_RoomName, Room}] -> add_user_to_room(Socket, UserName, RoomName, Room);
+        [{_RoomName, Room}] ->
+          case is_user_authorised(Socket, UserName, Room) of
+            true -> add_user_to_room(Socket, UserName, RoomName, Room);
+            _ -> {error, not_found}
+          end;
         [] -> {error, not_found}
       end;
     {ok, #user{name=UserName, room=CurrentRoomName}} -> % the user is in another room
+                                                        % (or potentially the same!)
       case ets:lookup(rooms, RoomName) of
         [{_NewRoomName, NewRoom}] ->
-          [{_RoomName, CurrentRoom}] = ets:lookup(rooms, CurrentRoomName),
-          remove_user_from_room(Socket, UserName, CurrentRoomName, CurrentRoom),
-          add_user_to_room(Socket, UserName, RoomName, NewRoom);
+          case is_user_authorised(Socket, UserName, NewRoom) of
+            true -> % move the user from one room to the other
+              [{_RoomName, CurrentRoom}] = ets:lookup(rooms, CurrentRoomName),
+              remove_user_from_room(Socket, UserName, CurrentRoomName, CurrentRoom),
+              add_user_to_room(Socket, UserName, RoomName, NewRoom);
+            _ -> {error, not_found}
+          end;
         [] -> {error, not_found}
       end;
     {error, not_logged_in} -> {error, not_logged_in}
@@ -83,13 +128,20 @@ delete_room(RoomName, Room) ->
 
   % update the sessions of all participants
   Func = fun({Socket, UserName}) ->
-             ets:insert(sessions, {Socket, #user{name=UserName, room=nil}})
+           ets:insert(sessions, {Socket, #user{name=UserName, room=nil}})
          end,
   lists:map(Func, Room#room.participants),
 
   % delete the room
   ets:delete(rooms, RoomName),
   ok.
+
+% returns whether the user is authorised to join a room or not
+is_user_authorised(UserSocket, UserName, Room) ->
+  case Room#room.type of
+    private -> lists:member({UserSocket, UserName}, Room#room.members);
+    _ -> true % public room
+  end.
 
 % assumes that the user exists and
 % that they are not in another room;
@@ -105,7 +157,7 @@ add_user_to_room(UserSocket, UserName, RoomName, Room) ->
   ok.
 
 % assumes that the user exists and,
-% if also the room exists, then the user is in it
+% if also the room exists, then the user is in it;
 % additionally, it broadcasts a message to all participants
 remove_user_from_room(UserSocket, UserName, RoomName, Room) ->
   messaging_handler:send_message_to_room(UserSocket,

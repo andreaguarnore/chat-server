@@ -26,6 +26,8 @@ handle_call({logout, Args}, _From, State) ->
 % room commands
 handle_call({room_create, Args}, _From, State) ->
   {reply, room_handler:create(Args), State};
+handle_call({room_createp, Args}, _From, State) ->
+  {reply, room_handler:createp(Args), State};
 handle_call({room_delete, Args}, _From, State) ->
   {reply, room_handler:delete(Args), State};
 handle_call({room_list, Args}, _From, State) ->

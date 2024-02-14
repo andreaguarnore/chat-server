@@ -4,12 +4,12 @@
 
 -export([start/2, stop/1]).
 
--include_lib("shared_include/constants.hrl").
-
 start(_StartType, _StartArgs) ->
-  case gen_tcp:connect("localhost", ?PORT, [binary,
-                                            {packet, 0},
-                                            {active, false}]) of
+  {ok, Port} = application:get_env(port),
+  io:format("connecting to port ~B~n", [Port]),
+  case gen_tcp:connect("localhost", Port, [binary,
+                                           {packet, 0},
+                                           {active, false}]) of
     {ok, Socket} ->
       spawn(fun() -> handler(Socket) end),
       io:format("(type /help for help)~n", []),
@@ -28,20 +28,23 @@ read_input(Socket) ->
     "\n" -> read_input(Socket);
     "/help\n" ->
       io:format("basic commands" ++
-                "\n  /help" ++
-                "\n  /quit" ++
-                "\n  <message>            to send a message" ++
-                "\n  /pm <user> <message> to send a private message" ++
+                "\n  /help                 show this help" ++
+                "\n  /quit                 quit the client" ++
+                "\n  <message>             send a message" ++
+                "\n  /pm <user> <message>  send a private message" ++
                 "\n\nuser commands"
-                "\n  /whoami" ++
-                "\n  /login <username>" ++
-                "\n  /logout" ++
+                "\n  /whoami               print the user name" ++
+                "\n  /login <username>     login to the server" ++
+                "\n  /logout               logout from the server" ++
                 "\n\nroom commands" ++
-                "\n  /room create <name>" ++
-                "\n  /room delete <name>" ++
-                "\n  /room list" ++
-                "\n  /room join <name>" ++
-                "\n  /room leave" ++
+                "\n  /room create <name>   create a public room" ++
+                "\n  /room createp <name> <members..>" ++
+                "\n                        create a private room with" ++
+                "\n                        with the given members" ++
+                "\n  /room delete <name>   delete a room" ++
+                "\n  /room list            list all rooms" ++
+                "\n  /room join <name>     join a room" ++
+                "\n  /room leave           leave the current room" ++
                 "~n"),
       read_input(Socket);
     "/quit\n" ->
