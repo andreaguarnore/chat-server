@@ -1,11 +1,11 @@
--module(room_handler).
+-module(ets_room_handler).
 
 -export([create/1, createp/1, delete/1, list/1, join/1, leave/1]).
 
 -include("records.hrl").
 
 create({Socket, RoomName}) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=UserName}} ->
       case ets:lookup(rooms, RoomName) of
         [] ->
@@ -21,7 +21,7 @@ create({Socket, RoomName}) ->
   end.
 
 createp({Socket, RoomName, Members}) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=UserName}} ->
       % take the sockets of all (unique) members (including the creator)
       AllMembers = sets:from_list([UserName | Members]),
@@ -42,7 +42,7 @@ createp({Socket, RoomName, Members}) ->
   end.
 
 delete({Socket, RoomName}) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=UserName}} ->
       case ets:lookup(rooms, RoomName) of
         [{_, Room}] when Room#room.owner == UserName -> delete_room(RoomName, Room);
@@ -53,7 +53,7 @@ delete({Socket, RoomName}) ->
   end.
 
 list(Socket) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=UserName}} ->
       % fold on the rooms to retrieve a list of strings where
       % each element contains information about a room; skip
@@ -74,7 +74,7 @@ list(Socket) ->
   end.
 
 join({Socket, RoomName}) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=UserName, room=nil}} -> % the user is not in a room
       case ets:lookup(rooms, RoomName) of
         [{_RoomName, Room}] ->
@@ -101,7 +101,7 @@ join({Socket, RoomName}) ->
   end.
 
 leave(Socket) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=UserName, room=RoomName}} when RoomName /= nil ->
       [{_RoomName, Room}] = ets:lookup(rooms, RoomName),
       remove_user_from_room(Socket, UserName, RoomName, Room);
@@ -150,7 +150,7 @@ add_user_to_room(UserSocket, UserName, RoomName, Room) ->
   Participants = [{UserSocket, UserName} | Room#room.participants],
   ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=RoomName}}),
-  messaging_handler:send_message_to_room(UserSocket,
+  ets_messaging_handler:send_message_to_room(UserSocket,
                                          UserName,
                                          "joined the room",
                                          Room),
@@ -160,7 +160,7 @@ add_user_to_room(UserSocket, UserName, RoomName, Room) ->
 % if also the room exists, then the user is in it;
 % additionally, it broadcasts a message to all participants
 remove_user_from_room(UserSocket, UserName, RoomName, Room) ->
-  messaging_handler:send_message_to_room(UserSocket,
+  ets_messaging_handler:send_message_to_room(UserSocket,
                                          UserName,
                                          "left the room",
                                          Room),

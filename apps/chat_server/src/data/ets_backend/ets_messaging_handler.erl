@@ -1,4 +1,4 @@
--module(messaging_handler).
+-module(ets_messaging_handler).
 
 -export([room_message/1, private_message/1]).
 -export([send_message_to_room/4]).
@@ -6,7 +6,7 @@
 -include("records.hrl").
 
 room_message({Socket, Msg}) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=UserName, room=RoomName}} when RoomName /= nil -> % user in a room
       [{_RoomName, Room}] = ets:lookup(rooms, RoomName), % assume it exists
       send_message_to_room(Socket, UserName, Msg, Room);
@@ -15,7 +15,7 @@ room_message({Socket, Msg}) ->
   end.
 
 private_message({Socket, Receiver, Msg}) ->
-  case user_handler:whoami(Socket) of
+  case ets_user_handler:whoami(Socket) of
     {ok, #user{name=SenderUserName}} ->
       % find receiver in sessions
       ReceiverPredicate = fun({_Socket, User}) -> User#user.name == Receiver end,

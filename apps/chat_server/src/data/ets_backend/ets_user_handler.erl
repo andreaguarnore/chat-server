@@ -1,4 +1,4 @@
--module(user_handler).
+-module(ets_user_handler).
 
 -export([whoami/1, login/1, logout/1]).
 
@@ -31,7 +31,7 @@ logout(Socket) ->
       [{_Socket, UserNames}] = ets:lookup(state, usernames),
       case lists:member(UserName, UserNames) of
         true ->
-          _ = room_handler:leave(Socket), % leave current room, if any
+          _ = ets_room_handler:leave(Socket), % leave current room, if any
           ets:delete(sessions, Socket),
           ets:insert(state, {usernames, lists:delete(UserName, UserNames)}),
           ok;

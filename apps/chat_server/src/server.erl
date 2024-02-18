@@ -14,7 +14,7 @@ start(_StartType, _StartArgs) ->
                                         {reuseaddr, true},
                                         {active, true}]),
   spawn(fun() -> accept_client(LSocket) end),
-  ets_server:start_link(),
+  data_frontend:start_link(),
   {ok, LSocket}.
 
 stop(LSocket) ->
@@ -54,7 +54,7 @@ handle_client(Socket) ->
   end.
 
 call(Command, Args) ->
-  gen_server:call(ets_server, {Command, Args}).
+  gen_server:call(data_frontend, {Command, Args}).
 
 handle_command(Socket, UserInput) ->
   Command = string:tokens(UserInput, " "),

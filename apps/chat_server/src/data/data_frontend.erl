@@ -1,4 +1,4 @@
--module(ets_server).
+-module(data_frontend).
 
 -behaviour(gen_server).
 
@@ -8,40 +8,54 @@
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
+-define(BACKEND, ets).
+
+% define handlers' modules and `init` wrt the defined backend
+% (note: unfortunately i see no better way than defining the handlers manually,
+%        as the only alternative would be to manipulate the AST to concatenate
+%        the atoms defining the backend and handlers' macros)
+-if(?BACKEND == ets).
+-define(USER_HANDLER, ets_user_handler).
+-define(ROOM_HANDLER, ets_room_handler).
+-define(MESSAGING_HANDLER, ets_messaging_handler).
 init([]) ->
   ets:new(state, [named_table, set, public]),
   ets:new(sessions, [named_table, set, public]), % port: user
   ets:new(rooms, [named_table, ordered_set, public]), % room name: room
   ets:insert(state, {usernames, []}), % list of user(names) logged in
   {ok, []}.
+%-elif(?BACKEND == ddb).
+-else.
+% unexpected backend: fail compilation
+-endif.
 
 % user commands
 handle_call({whoami, Args}, _From, State) ->
-  {reply, user_handler:whoami(Args), State};
+  {reply, ?USER_HANDLER:whoami(Args), State};
 handle_call({login, Args}, _From, State) ->
-  {reply, user_handler:login(Args), State};
+  {reply, ?USER_HANDLER:login(Args), State};
 handle_call({logout, Args}, _From, State) ->
-  {reply, user_handler:logout(Args), State};
+  {reply, ?USER_HANDLER:logout(Args), State};
 
 % room commands
 handle_call({room_create, Args}, _From, State) ->
-  {reply, room_handler:create(Args), State};
+  {reply, ?ROOM_HANDLER:create(Args), State};
 handle_call({room_createp, Args}, _From, State) ->
-  {reply, room_handler:createp(Args), State};
+  {reply, ?ROOM_HANDLER:createp(Args), State};
 handle_call({room_delete, Args}, _From, State) ->
-  {reply, room_handler:delete(Args), State};
+  {reply, ?ROOM_HANDLER:delete(Args), State};
 handle_call({room_list, Args}, _From, State) ->
-  {reply, room_handler:list(Args), State};
+  {reply, ?ROOM_HANDLER:list(Args), State};
 handle_call({room_join, Args}, _From, State) ->
-  {reply, room_handler:join(Args), State};
+  {reply, ?ROOM_HANDLER:join(Args), State};
 handle_call({room_leave, Args}, _From, State) ->
-  {reply, room_handler:leave(Args), State};
+  {reply, ?ROOM_HANDLER:leave(Args), State};
 
 % messaging commands
 handle_call({room_message, Args}, _From, State) ->
-  {reply, messaging_handler:room_message(Args), State};
+  {reply, ?MESSAGING_HANDLER:room_message(Args), State};
 handle_call({pm, Args}, _From, State) ->
-  {reply, messaging_handler:private_message(Args), State}.
+  {reply, ?MESSAGING_HANDLER:private_message(Args), State}.
 
 % unused callbacks
 handle_cast(_Msg, State) -> {noreply, State}.
