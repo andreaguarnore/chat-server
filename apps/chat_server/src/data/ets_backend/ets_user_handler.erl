@@ -15,10 +15,15 @@ login({Socket, UserName}) ->
     {error, not_logged_in} ->
       [{_Socket, UserNames}] = ets:lookup(state, usernames),
       case lists:member(UserName, UserNames) of
-        false ->
-          ets:insert(sessions, {Socket, #user{name=UserName}}),
-          ets:insert(state, {usernames, [UserName | UserNames]}),
-          ok;
+        false -> % non-existing user
+          {ok, MP} = re:compile("^[a-zA-Z][a-zA-Z0-9-_]*$"),
+          case re:run(UserName, MP) of % validate name
+            {match, _} ->
+              ets:insert(sessions, {Socket, #user{name=UserName}}),
+              ets:insert(state, {usernames, [UserName | UserNames]}),
+              ok;
+            nomatch -> {error, invalid}
+          end;
         true ->
           {error, name_taken}
       end;

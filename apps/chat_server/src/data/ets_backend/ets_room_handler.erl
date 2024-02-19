@@ -14,7 +14,8 @@ create({Socket, RoomName}) ->
           ok;
         % in theory, if there is a private room by the same name, this will
         % return `name_taken`, even if the user should not be able to see
-        % such room
+        % such room; the only way to solve this would be to have two joins:
+        % one command to join a public room, and one to join a private one
         [{_RoomName, _Room}] -> {error, name_taken}
       end;
     {error, not_logged_in} -> {error, not_logged_in}
@@ -75,24 +76,19 @@ list(Socket) ->
 
 join({Socket, RoomName}) ->
   case ets_user_handler:whoami(Socket) of
-    {ok, #user{name=UserName, room=nil}} -> % the user is not in a room
+    {ok, #user{name=UserName, room=CurrentRoomName}} ->
       case ets:lookup(rooms, RoomName) of
         [{_RoomName, Room}] ->
           case is_user_authorised(Socket, UserName, Room) of
-            true -> add_user_to_room(Socket, UserName, RoomName, Room);
-            _ -> {error, not_found}
-          end;
-        [] -> {error, not_found}
-      end;
-    {ok, #user{name=UserName, room=CurrentRoomName}} -> % the user is in another room
-                                                        % (or potentially the same!)
-      case ets:lookup(rooms, RoomName) of
-        [{_NewRoomName, NewRoom}] ->
-          case is_user_authorised(Socket, UserName, NewRoom) of
-            true -> % move the user from one room to the other
-              [{_RoomName, CurrentRoom}] = ets:lookup(rooms, CurrentRoomName),
-              remove_user_from_room(Socket, UserName, CurrentRoomName, CurrentRoom),
-              add_user_to_room(Socket, UserName, RoomName, NewRoom);
+            true ->
+              % make user leave if they are in a room
+              case CurrentRoomName of
+                nil -> ok;
+                _ ->
+                  [{_, CurrentRoom}] = ets:lookup(rooms, CurrentRoomName),
+                  remove_user_from_room(Socket, UserName, CurrentRoomName, CurrentRoom)
+              end,
+              add_user_to_room(Socket, UserName, RoomName, Room);
             _ -> {error, not_found}
           end;
         [] -> {error, not_found}

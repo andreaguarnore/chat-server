@@ -69,6 +69,7 @@ handle_command(Socket, UserInput) ->
     ["/login", UserName] ->
       case call(login, {Socket, UserName}) of
         ok -> {ok, io_lib:format("hello, ~s!", [UserName])};
+        {error, invalid} -> {error, "user names must begin with a letter and can only contain letters, numbers, dashes, and underscores"};
         {error, name_taken} -> {error, io_lib:format("~s is already logged in", [UserName])};
         {error, already_logged_in} -> {error, "you are already logged in!"}
       end;

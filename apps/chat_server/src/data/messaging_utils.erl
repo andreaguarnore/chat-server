@@ -3,18 +3,22 @@
 -export([room_message/1, private_message/1]).
 -export([send_message_to_room/4]).
 
+-include("backend_macro.hrl").
 -include("records.hrl").
 
+% sends a message to all participants of a room, including the sender themself
 room_message({Socket, Msg}) ->
-  case ddb_user_handler:whoami(Socket) of
+  case ?USER_HANDLER:whoami(Socket) of
     {ok, #user{name=UserName, room=RoomName}} when RoomName /= nil -> % user in a room
       send_message_to_room(Socket, UserName, Msg, RoomName);
     {ok, #user{name=_UserName, room=nil}} -> {error, not_in_a_room};
     {error, not_logged_in} -> {error, not_logged_in}
   end.
 
+% sends a private message to another user; private messages are synchronous:
+% they can only be sent when both parties are logged in
 private_message({Socket, Receiver, Msg}) ->
-  case ddb_user_handler:whoami(Socket) of
+  case ?USER_HANDLER:whoami(Socket) of
     {ok, #user{name=SenderUserName}} ->
       % find receiver in sessions
       ReceiverPredicate = fun({_Socket, User}) -> User#user.name == Receiver end,
@@ -40,7 +44,7 @@ send_message_to_room(UserSocket, UserName, Msg, RoomName) ->
   ParticipantsSockets = [ParticipantSocket || {ParticipantSocket, _Participant} <- Participants],
   client_messaging:broadcast(ParticipantsSockets, UserName, Msg),
 
-  % show message to current user
+  % show message to the current user as coming from themself
   client_messaging:send(UserSocket, "you", Msg),
   ok.
 

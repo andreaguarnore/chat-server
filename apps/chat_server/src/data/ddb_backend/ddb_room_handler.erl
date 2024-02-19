@@ -15,6 +15,10 @@ create({Socket, RoomName}) ->
                    <<"Members">> => #{<<"S">> => <<"">>}},
           ddb_utils:put_item(rooms, Item),
           ok;
+        % in theory, if there is a private room by the same name, this will
+        % return `name_taken`, even if the user should not be able to see
+        % such room; the only way to solve this would be to have two joins:
+        % one command to join a public room, and one to join a private one
         {ok, _, _} -> {error, name_taken}
       end;
     {error, not_logged_in} -> {error, not_logged_in}
@@ -31,7 +35,7 @@ createp({Socket, RoomName, Members}) ->
           FilterFunc = fun(User) -> lists:member(binary_to_list(User), Members) end,
           AvailableMembers = lists:filter(FilterFunc, AllUsers),
 
-          % add available members (including the owner) to the room as:
+          % format available members (including the owner) as:
           %   "member1|member2[|memberN]"
           FormattedMembers = string:join([UserName | AvailableMembers], "|"),
           RoomItem = #{<<"Name">> => #{<<"S">> => list_to_binary(RoomName)},
@@ -91,7 +95,7 @@ list(Socket) ->
 
 join({Socket, RoomName}) ->
   case ddb_user_handler:whoami(Socket) of
-    {ok, #user{name=UserName, room=CurrentRoomName}} -> % the user is not in a room
+    {ok, #user{name=UserName, room=CurrentRoomName}} ->
       case ddb_utils:get_item(rooms, RoomName) of
         {ok, #{<<"Item">> := Room}, _} ->
           #{<<"Type">> := #{<<"S">> := RoomType},
@@ -101,7 +105,7 @@ join({Socket, RoomName}) ->
             true ->
               % make user leave if they are in a room
               case CurrentRoomName of
-                nil -> nil;
+                nil -> ok;
                 _ -> remove_user_from_room(Socket, UserName, CurrentRoomName)
               end,
               add_user_to_room(Socket, UserName, RoomName);

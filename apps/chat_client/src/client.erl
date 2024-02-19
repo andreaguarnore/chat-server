@@ -57,7 +57,7 @@ read_input(Socket) ->
 handler(Socket) ->
   case gen_tcp:recv(Socket, 0) of
     {ok, Bin} ->
-      Msg = string:trim(binary:bin_to_list(Bin)),
+      Msg = string:trim(binary_to_list(Bin)),
       io:format("\r~s~n~~ ", [Msg]),
       handler(Socket);
     {error, _} ->

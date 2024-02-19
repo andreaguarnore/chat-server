@@ -15,10 +15,15 @@ login({Socket, UserName}) ->
     {error, not_logged_in} -> % no user in current session with this socket
       case ddb_utils:get_item(users, UserName) of
         {ok, User, _} when map_size(User) == 0 -> % non-existing user
-          Item = #{<<"Name">> => #{<<"S">> => list_to_binary(UserName)}},
-          ddb_utils:put_item(users, Item),
-          ets:insert(sessions, {Socket, #user{name=UserName}}),
-          ok;
+          {ok, MP} = re:compile("^[a-zA-Z][a-zA-Z0-9-_]*$"),
+          case re:run(UserName, MP) of % validate name
+            {match, _} ->
+              Item = #{<<"Name">> => #{<<"S">> => list_to_binary(UserName)}},
+              ddb_utils:put_item(users, Item),
+              ets:insert(sessions, {Socket, #user{name=UserName}}),
+              ok;
+            nomatch -> {error, invalid}
+          end;
         {ok, _, _} -> % user already logged in sometime prior
           Func = fun({_Socket, User}) -> User#user.name == UserName end,
           case ets_utils:first(Func, sessions) of

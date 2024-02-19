@@ -5,29 +5,21 @@
 -export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3]).
 
+-include("backend_macro.hrl").
+
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--define(BACKEND, ddb).
-
-% define handlers' modules and `init` wrt the defined backend
-% (note: unfortunately i see no better way than defining the handlers manually,
-%        as the only alternative would be to manipulate the AST to concatenate
-%        the atoms defining the backend and handlers' macros)
+% define `init` wrt the defined backend
 -if(?BACKEND == ets).
--define(USER_HANDLER, ets_user_handler).
--define(ROOM_HANDLER, ets_room_handler).
--define(MESSAGING_HANDLER, messaging_utils).
 init([]) ->
   ets:new(state, [named_table, set, public]),
-  ets:new(sessions, [named_table, set, public]), % port: user
-  ets:new(rooms, [named_table, ordered_set, public]), % room name: room
+  ets:new(sessions, [named_table, set, public]), % port: user record
+  ets:new(rooms, [named_table, ordered_set, public]), % room name: room record
   ets:insert(state, {usernames, []}), % list of user(names) logged in
   {ok, []}.
+
 -elif(?BACKEND == ddb).
--define(USER_HANDLER, ddb_user_handler).
--define(ROOM_HANDLER, ddb_room_handler).
--define(MESSAGING_HANDLER, messaging_utils).
 init([]) ->
   ets:new(aws, [named_table, set, public]),
   ets:new(sessions, [named_table, set, public]),
@@ -39,12 +31,15 @@ init([]) ->
                                         list_to_binary(Secret),
                                         list_to_binary(Port),
                                         <<"localhost">>),
+  % keep table specs to facilitate getting, deleting, and scanning items;
+  % for items to be added the handler is still required to pass in the specs
   ets:insert(aws, {client, Client}),
   ets:insert(table_specs, {users, {<<"Users">>, {<<"Name">>, <<"S">>}}}),
   ets:insert(table_specs, {rooms, {<<"Rooms">>, {<<"Name">>, <<"S">>}}}),
   {ok, []}.
+
 -else.
-% unexpected backend: fail compilation
+% unexpected backend: fail compilation by not defining `init`
 -endif.
 
 % user commands
