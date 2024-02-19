@@ -2,9 +2,9 @@
 
 -behaviour(application).
 
--export([start/2, stop/1]).
-
 -include("records.hrl").
+
+-export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
   {ok, Port} = application:get_env(port),

@@ -1,8 +1,11 @@
 -module(ddb_room_handler).
 
--export([create/1, createp/1, delete/1, list/1, join/1, leave/1]).
-
+-include("backend_macro.hrl").
 -include("records.hrl").
+
+-if(?BACKEND == ddb).
+
+-export([create/1, createp/1, delete/1, list/1, join/1, leave/1]).
 
 create({Socket, RoomName}) ->
   case ddb_user_handler:whoami(Socket) of
@@ -172,4 +175,6 @@ remove_user_from_room(UserSocket, UserName, RoomName) ->
                                        RoomName),
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=nil}}),
   ok.
+
+-endif.
 

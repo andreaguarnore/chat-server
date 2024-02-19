@@ -1,10 +1,10 @@
 -module(messaging_utils).
 
--export([room_message/1, private_message/1]).
--export([send_message_to_room/4]).
-
 -include("backend_macro.hrl").
 -include("records.hrl").
+
+-export([room_message/1, private_message/1]).
+-export([send_message_to_room/4]).
 
 % sends a message to all participants of a room, including the sender themself
 room_message({Socket, Msg}) ->

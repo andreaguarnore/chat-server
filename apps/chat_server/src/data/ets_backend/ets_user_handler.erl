@@ -1,8 +1,11 @@
 -module(ets_user_handler).
 
--export([whoami/1, login/1, logout/1]).
-
+-include("backend_macro.hrl").
 -include("records.hrl").
+
+-if(?BACKEND == ets).
+
+-export([whoami/1, login/1, logout/1]).
 
 whoami(Socket) ->
   case ets:lookup(sessions, Socket) of
@@ -40,4 +43,6 @@ logout(Socket) ->
       ok;
     {error, not_logged_in} -> {error, not_logged_in}
   end.
+
+-endif.
 
