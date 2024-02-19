@@ -8,7 +8,7 @@
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--define(BACKEND, ets).
+-define(BACKEND, ddb).
 
 % define handlers' modules and `init` wrt the defined backend
 % (note: unfortunately i see no better way than defining the handlers manually,
@@ -24,7 +24,25 @@ init([]) ->
   ets:new(rooms, [named_table, ordered_set, public]), % room name: room
   ets:insert(state, {usernames, []}), % list of user(names) logged in
   {ok, []}.
-%-elif(?BACKEND == ddb).
+-elif(?BACKEND == ddb).
+-define(USER_HANDLER, ddb_user_handler).
+-define(ROOM_HANDLER, ddb_room_handler).
+-define(MESSAGING_HANDLER, ddb_messaging_handler).
+init([]) ->
+  ets:new(aws, [named_table, set, public]),
+  ets:new(sessions, [named_table, set, public]),
+  ets:new(table_specs, [named_table, set, public]),
+  {ok, Key} = application:get_env(aws_key),
+  {ok, Secret} = application:get_env(aws_secret),
+  {ok, Port} = application:get_env(ddb_port),
+  Client = aws_client:make_local_client(list_to_binary(Key),
+                                        list_to_binary(Secret),
+                                        list_to_binary(Port),
+                                        <<"localhost">>),
+  ets:insert(aws, {client, Client}),
+  ets:insert(table_specs, {users, {<<"Users">>, {<<"Name">>, <<"S">>}}}),
+  ets:insert(table_specs, {rooms, {<<"Rooms">>, {<<"Name">>, <<"S">>}}}),
+  {ok, []}.
 -else.
 % unexpected backend: fail compilation
 -endif.

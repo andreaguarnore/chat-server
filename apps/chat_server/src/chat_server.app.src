@@ -5,7 +5,14 @@
   {mod, {server, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    aws
    ]},
-  {env, [{port, 2000}]}
+  {env,
+   [
+    {port, 2000},
+    {aws_key, "mykey"},
+    {aws_secret, "mysecret"},
+    {ddb_port, "8000"}
+   ]}
  ]}.

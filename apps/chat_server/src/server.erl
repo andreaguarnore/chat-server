@@ -48,7 +48,7 @@ handle_client(Socket) ->
           handle_client(Socket)
       end;
     {tcp_closed, Socket} ->
-      _ = user_handler:logout(Socket),
+      _ = call(logout, Socket),
       io:format("[~p] socket closed~n", [Socket]),
       ok
   end.

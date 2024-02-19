@@ -46,7 +46,7 @@ delete({Socket, RoomName}) ->
     {ok, #user{name=UserName}} ->
       case ets:lookup(rooms, RoomName) of
         [{_, Room}] when Room#room.owner == UserName -> delete_room(RoomName, Room);
-        [{_, _}] -> {error, unauthorized};
+        [{_, _}] -> {error, unauthorised};
         [] -> {error, not_found}
       end;
     {error, not_logged_in} -> {error, not_logged_in}
@@ -112,9 +112,9 @@ leave(Socket) ->
 % pretty print a room
 room_to_string(CurrentUserName, {RoomName, Room}) ->
   Owner = case Room#room.owner of
-    CurrentUserName -> "[owner]";
-    _ -> ""
-  end,
+            CurrentUserName -> "[owner]";
+            _ -> ""
+          end,
   FormatArgs = [RoomName, Room#room.type,
                 length(Room#room.participants), Owner],
   io_lib:format("~s (~s, ~B participants) ~s", FormatArgs).
@@ -151,9 +151,9 @@ add_user_to_room(UserSocket, UserName, RoomName, Room) ->
   ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=RoomName}}),
   ets_messaging_handler:send_message_to_room(UserSocket,
-                                         UserName,
-                                         "joined the room",
-                                         Room),
+                                             UserName,
+                                             "joined the room",
+                                             Room),
   ok.
 
 % assumes that the user exists and,
