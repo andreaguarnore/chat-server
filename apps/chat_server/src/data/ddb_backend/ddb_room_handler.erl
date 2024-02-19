@@ -20,8 +20,30 @@ create({Socket, RoomName}) ->
     {error, not_logged_in} -> {error, not_logged_in}
   end.
 
-createp({_Socket, _RoomName, _Members}) ->
-  ok.
+createp({Socket, RoomName, Members}) ->
+  case ddb_user_handler:whoami(Socket) of
+    {ok, #user{name=UserName}} ->
+      case ddb_utils:get_item(rooms, RoomName) of
+        {ok, Room, _} when map_size(Room) == 0 -> % room name is available
+          % take the usernames of all existing members
+          Items = ddb_utils:scan(users),
+          AllUsers = [User || #{<<"Name">> := #{<<"S">> := User}} <- Items],
+          FilterFunc = fun(User) -> lists:member(binary_to_list(User), Members) end,
+          AvailableMembers = lists:filter(FilterFunc, AllUsers),
+
+          % add available members (including the owner) to the room as:
+          %   "member1|member2[|memberN]"
+          FormattedMembers = string:join([UserName | AvailableMembers], "|"),
+          RoomItem = #{<<"Name">> => #{<<"S">> => list_to_binary(RoomName)},
+                       <<"Owner">> => #{<<"S">> => list_to_binary(UserName)},
+                       <<"Type">> => #{<<"S">> => <<"private">>},
+                       <<"Members">> => #{<<"S">> => list_to_binary(FormattedMembers)}},
+          ddb_utils:put_item(rooms, RoomItem),
+          ok;
+        {ok, _, _} -> {error, name_taken}
+      end;
+    {error, not_logged_in} -> {error, not_logged_in}
+  end.
 
 delete({Socket, RoomName}) ->
   case ddb_user_handler:whoami(Socket) of
@@ -40,11 +62,15 @@ delete({Socket, RoomName}) ->
 list(Socket) ->
   case ddb_user_handler:whoami(Socket) of
     {ok, #user{name=UserName}} ->
+      % fold on the rooms to retrieve a list of strings where
+      % each element contains information about a room; skip
+      % private rooms where the user is not a member
       Rooms = ddb_utils:scan(rooms),
       Func = fun(Room, Acc) ->
                #{<<"Name">> := #{<<"S">> := RoomNameBin},
                  <<"Owner">> := #{<<"S">> := RoomOwnerBin},
-                 <<"Type">> :=#{<<"S">> := RoomTypeBin}} = Room,
+                 <<"Type">> := #{<<"S">> := RoomTypeBin},
+                 <<"Members">> := #{<<"S">> := RoomMembers}} = Room,
                RoomName = binary_to_list(RoomNameBin),
                RoomOwner = binary_to_list(RoomOwnerBin),
                RoomType = binary_to_list(RoomTypeBin),
@@ -52,7 +78,11 @@ list(Socket) ->
                  "public" ->
                    [room_to_string(UserName, {RoomName, RoomOwner, RoomType}) | Acc];
                  _ -> % private room
-                   Acc % todo
+                   ParsedRoomMembers = string:tokens(binary_to_list(RoomMembers), "|"),
+                   case lists:member(UserName, ParsedRoomMembers) of
+                     true -> [room_to_string(UserName, {RoomName, RoomOwner, RoomType}) | Acc];
+                     _ -> Acc
+                   end
                end
              end,
       {ok, lists:foldl(Func, [], Rooms)};
@@ -61,21 +91,24 @@ list(Socket) ->
 
 join({Socket, RoomName}) ->
   case ddb_user_handler:whoami(Socket) of
-    {ok, #user{name=UserName, room=nil}} -> % the user is not in a room
+    {ok, #user{name=UserName, room=CurrentRoomName}} -> % the user is not in a room
       case ddb_utils:get_item(rooms, RoomName) of
-        {ok, #{<<"Item">> := Room}, _} -> % room exists
+        {ok, #{<<"Item">> := Room}, _} ->
           #{<<"Type">> := #{<<"S">> := RoomType},
             <<"Members">> := #{<<"S">> := MembersAsStr}} = Room,
           RoomMembers = string:tokens(binary_to_list(MembersAsStr), "|"),
           case is_user_authorised(UserName, RoomType, RoomMembers) of
-            true -> add_user_to_room(Socket, UserName, RoomName);
+            true ->
+              % make user leave if they are in a room
+              case CurrentRoomName of
+                nil -> nil;
+                _ -> remove_user_from_room(Socket, UserName, CurrentRoomName)
+              end,
+              add_user_to_room(Socket, UserName, RoomName);
             _ -> {error, not_found}
           end;
         {ok, _, _} -> {error, not_found}
       end;
-    {ok, #user{name=_UserName, room=_CurrentRoomName}} -> % the user is in another room
-                                                        % (or potentially the same!)
-      ok;
     {error, not_logged_in} -> {error, not_logged_in}
   end.
 
@@ -122,17 +155,17 @@ is_user_authorised(UserName, RoomType, RoomMembers) ->
 
 add_user_to_room(UserSocket, UserName, RoomName) ->
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=RoomName}}),
-  ddb_messaging_handler:send_message_to_room(UserSocket,
-                                             UserName,
-                                             "joined the room",
-                                             RoomName),
+  messaging_utils:send_message_to_room(UserSocket,
+                                       UserName,
+                                       "joined the room",
+                                       RoomName),
   ok.
 
 remove_user_from_room(UserSocket, UserName, RoomName) ->
-  ddb_messaging_handler:send_message_to_room(UserSocket,
-                                             UserName,
-                                             "left the room",
-                                             RoomName),
+  messaging_utils:send_message_to_room(UserSocket,
+                                       UserName,
+                                       "left the room",
+                                       RoomName),
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=nil}}),
   ok.
 

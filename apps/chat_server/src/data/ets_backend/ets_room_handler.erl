@@ -57,7 +57,7 @@ list(Socket) ->
     {ok, #user{name=UserName}} ->
       % fold on the rooms to retrieve a list of strings where
       % each element contains information about a room; skip
-      % rooms where the user is not a member
+      % private rooms where the user is not a member
       Func = fun({RoomName, Room}, Acc) ->
                if
                  Room#room.type == public -> % public room
@@ -150,20 +150,20 @@ add_user_to_room(UserSocket, UserName, RoomName, Room) ->
   Participants = [{UserSocket, UserName} | Room#room.participants],
   ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=RoomName}}),
-  ets_messaging_handler:send_message_to_room(UserSocket,
-                                             UserName,
-                                             "joined the room",
-                                             Room),
+  messaging_utils:send_message_to_room(UserSocket,
+                                       UserName,
+                                       "joined the room",
+                                       Room),
   ok.
 
 % assumes that the user exists and,
 % if also the room exists, then the user is in it;
 % additionally, it broadcasts a message to all participants
 remove_user_from_room(UserSocket, UserName, RoomName, Room) ->
-  ets_messaging_handler:send_message_to_room(UserSocket,
-                                         UserName,
-                                         "left the room",
-                                         Room),
+  messaging_utils:send_message_to_room(UserSocket,
+                                       UserName,
+                                       "left the room",
+                                       Room),
   Participants = lists:delete({UserSocket, UserName}, Room#room.participants),
   ets:insert(rooms, {RoomName, Room#room{participants=Participants}}),
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=nil}}),

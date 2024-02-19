@@ -17,7 +17,7 @@ start_link() ->
 -if(?BACKEND == ets).
 -define(USER_HANDLER, ets_user_handler).
 -define(ROOM_HANDLER, ets_room_handler).
--define(MESSAGING_HANDLER, ets_messaging_handler).
+-define(MESSAGING_HANDLER, messaging_utils).
 init([]) ->
   ets:new(state, [named_table, set, public]),
   ets:new(sessions, [named_table, set, public]), % port: user
@@ -27,7 +27,7 @@ init([]) ->
 -elif(?BACKEND == ddb).
 -define(USER_HANDLER, ddb_user_handler).
 -define(ROOM_HANDLER, ddb_room_handler).
--define(MESSAGING_HANDLER, ddb_messaging_handler).
+-define(MESSAGING_HANDLER, messaging_utils).
 init([]) ->
   ets:new(aws, [named_table, set, public]),
   ets:new(sessions, [named_table, set, public]),

@@ -94,9 +94,9 @@ handle_command(Socket, UserInput) ->
     ["/room", "delete", RoomName] ->
       case call(room_delete, {Socket, RoomName}) of
         ok -> {ok, io_lib:format("deleted room `~s`", [RoomName])};
-        {error, unauthorized} -> {error, io_lib:format("you are not the owner of room `~s`", [RoomName])};
+        {error, unauthorised} -> {error, io_lib:format("you are not the owner of room `~s`", [RoomName])};
         {error, not_found} -> {error, io_lib:format("room `~s` was not found", [RoomName])};
-        {error, not_logged_in} -> {error, "you are logged in!"}
+        {error, not_logged_in} -> {error, "you are not logged in!"}
       end;
     ["/room", "list"] ->
       case call(room_list, Socket) of
