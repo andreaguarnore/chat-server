@@ -25,4 +25,16 @@ aws dynamodb create-table \
      ReadCapacityUnits=5,WriteCapacityUnits=5 \
   --table-class STANDARD \
   --endpoint-url http://localhost:$port
+aws dynamodb create-table \
+  --table-name Messages \
+  --attribute-definitions \
+    AttributeName=Room,AttributeType=S \
+    AttributeName=TimeStamp,AttributeType=S \
+  --key-schema \
+    AttributeName=Room,KeyType=HASH \
+    AttributeName=TimeStamp,KeyType=RANGE \
+  --provisioned-throughput \
+     ReadCapacityUnits=5,WriteCapacityUnits=5 \
+  --table-class STANDARD \
+  --endpoint-url http://localhost:$port
 

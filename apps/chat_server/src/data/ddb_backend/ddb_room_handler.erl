@@ -35,12 +35,20 @@ createp({Socket, RoomName, Members}) ->
           % take the usernames of all existing members
           Items = ddb_utils:scan(users),
           AllUsers = [User || #{<<"Name">> := #{<<"S">> := User}} <- Items],
-          FilterFunc = fun(User) -> lists:member(binary_to_list(User), Members) end,
-          AvailableMembers = lists:filter(FilterFunc, AllUsers),
+          FilterMapFunc = fun(UserBin) ->
+                            User = binary_to_list(UserBin),
+                            case lists:member(User, Members) of
+                              true -> {true, User};
+                              false -> false
+                            end
+                          end,
+          FilteredMembers = lists:filtermap(FilterMapFunc,
+                                            [list_to_binary(UserName) | AllUsers]),
+
 
           % format available members (including the owner) as:
           %   "member1|member2[|memberN]"
-          FormattedMembers = string:join([UserName | AvailableMembers], "|"),
+          FormattedMembers = string:join(lists:usort(FilteredMembers), "|"),
           RoomItem = #{<<"Name">> => #{<<"S">> => list_to_binary(RoomName)},
                        <<"Owner">> => #{<<"S">> => list_to_binary(UserName)},
                        <<"Type">> => #{<<"S">> => <<"private">>},
@@ -111,6 +119,7 @@ join({Socket, RoomName}) ->
                 nil -> ok;
                 _ -> remove_user_from_room(Socket, UserName, CurrentRoomName)
               end,
+              show_latest_messages(Socket, RoomName),
               add_user_to_room(Socket, UserName, RoomName);
             _ -> {error, not_found}
           end;
@@ -174,6 +183,24 @@ remove_user_from_room(UserSocket, UserName, RoomName) ->
                                        "left the room",
                                        RoomName),
   ets:insert(sessions, {UserSocket, #user{name=UserName, room=nil}}),
+  ok.
+
+show_latest_messages(UserSocket, RoomName) ->
+  % query db for the latest messages in this room
+  TableName = element(1, ddb_utils:get_table(messages)),
+  Query = #{<<"TableName">> => TableName,
+            <<"KeyConditionExpression">> => <<"Room = :room">>,
+            <<"ExpressionAttributeValues">> => #{<<":room">> => #{<<"S">> => list_to_binary(RoomName)}},
+            <<"NoScanIndexForward">> => #{}, % descending order
+            <<"Limit">> => 20},
+  Client = ddb_utils:get_client(),
+  {ok, #{<<"Items">> := Items}, _} = aws_dynamodb:query(Client, Query),
+
+  MapFunc = fun(#{<<"Sender">> := #{<<"S">> := Sender},
+                  <<"Msg">> := #{<<"S">> := Msg}}) ->
+              client_messaging:send(UserSocket, binary_to_list(Sender), binary_to_list(Msg))
+            end,
+  lists:foreach(MapFunc, Items),
   ok.
 
 -endif.

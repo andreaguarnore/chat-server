@@ -1,9 +1,14 @@
 -module(ddb_utils).
 
--export([delete_item/2, get_client/0, get_item/2, put_item/2, scan/1]).
+-export([delete_item/2,
+         get_client/0,
+         get_item/2,
+         get_table/1,
+         put_item/2,
+         scan/1]).
 
 delete_item(Table, {HashKey, RangeKey}) ->
-  Client = ddb_utils:get_client(),
+  Client = get_client(),
   {TableName, {HashName, HashType}, {RangeName, RangeType}} = get_table(Table),
   Input =
     #{<<"Key">> =>
@@ -12,7 +17,7 @@ delete_item(Table, {HashKey, RangeKey}) ->
       <<"TableName">> => TableName},
   aws_dynamodb:delete_item(Client, Input);
 delete_item(Table, HashKey) ->
-  Client = ddb_utils:get_client(),
+  Client = get_client(),
   {TableName, {HashName, HashType}} = get_table(Table),
   Input = #{<<"Key">> => #{HashName => #{HashType => list_to_binary(HashKey)}},
             <<"TableName">> => TableName},
@@ -27,7 +32,7 @@ get_table(Table) ->
   TableSpec.
 
 get_item(Table, {HashKey, RangeKey}) ->
-  Client = ddb_utils:get_client(),
+  Client = get_client(),
   {TableName, {HashName, HashType}, {RangeName, RangeType}} = get_table(Table),
   Input =
     #{<<"Key">> =>
@@ -36,21 +41,21 @@ get_item(Table, {HashKey, RangeKey}) ->
       <<"TableName">> => TableName},
   aws_dynamodb:get_item(Client, Input);
 get_item(Table, HashKey) ->
-  Client = ddb_utils:get_client(),
+  Client = get_client(),
   {TableName, {HashName, HashType}} = get_table(Table),
   Input = #{<<"Key">> => #{HashName => #{HashType => list_to_binary(HashKey)}},
             <<"TableName">> => TableName},
   aws_dynamodb:get_item(Client, Input).
 
 put_item(Table, Item) ->
-  Client = ddb_utils:get_client(),
-  {TableName, _} = get_table(Table),
+  Client = get_client(),
+  TableName = element(1, get_table(Table)),
   Input = #{<<"TableName">> => TableName, <<"Item">> => Item},
   aws_dynamodb:put_item(Client, Input).
 
 scan(Table) ->
-  Client = ddb_utils:get_client(),
-  {TableName, _} = get_table(Table),
+  Client = get_client(),
+  TableName = element(1, get_table(Table)),
   Input = #{<<"TableName">> => TableName},
   {ok, #{<<"Items">> := Items}, _} = aws_dynamodb:scan(Client, Input),
   Items.

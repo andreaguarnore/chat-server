@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  chat-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.erlang
+    ports:
+      - "2000:2000"
+    depends_on:
+      - dynamodb-local
+  dynamodb-local:
+    build:
+      context: .
+      dockerfile: Dockerfile.dynamodb
+    ports:
+      - "8000:8000"
+

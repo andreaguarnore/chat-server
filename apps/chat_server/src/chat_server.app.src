@@ -1,7 +1,7 @@
 {application, chat_server,
  [
   {description, "A simple TCP/IP chat server"},
-  {vsn, "0.3.0"},
+  {vsn, "0.4.0"},
   {mod, {server, []}},
   {applications,
    [kernel,
@@ -13,6 +13,7 @@
     {port, 2000},
     {aws_key, "mykey"},
     {aws_secret, "mysecret"},
-    {ddb_port, "8000"}
+    {ddb_port, "8000"},
+    {ddb_hostname, "dynamodb-local"}
    ]}
  ]}.

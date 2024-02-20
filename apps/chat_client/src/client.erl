@@ -57,8 +57,11 @@ read_input(Socket) ->
 handler(Socket) ->
   case gen_tcp:recv(Socket, 0) of
     {ok, Bin} ->
-      Msg = string:trim(binary_to_list(Bin)),
-      io:format("\r~s~n~~ ", [Msg]),
+      Msg = binary_to_list(Bin),
+      io:format("\r~s~~ ", [Msg]), % this deletes whatever the user has typed
+                                   % on screen while keeping it in the buffer;
+                                   % not great but there is no easy way to
+                                   % create a tui in erlang
       handler(Socket);
     {error, _} ->
       ok

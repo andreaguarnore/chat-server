@@ -1,0 +1,9 @@
+FROM erlang:25
+
+WORKDIR /app
+COPY . /app
+
+RUN /app/rebar3 release
+EXPOSE 2000
+CMD ["/app/_build/default/rel/chat_server/bin/chat_server", "foreground"]
+

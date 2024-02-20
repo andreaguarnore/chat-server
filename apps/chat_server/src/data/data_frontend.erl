@@ -27,15 +27,18 @@ init([]) ->
   {ok, Key} = application:get_env(aws_key),
   {ok, Secret} = application:get_env(aws_secret),
   {ok, Port} = application:get_env(ddb_port),
+  {ok, Hostname} = application:get_env(ddb_hostname),
   Client = aws_client:make_local_client(list_to_binary(Key),
                                         list_to_binary(Secret),
                                         list_to_binary(Port),
-                                        <<"localhost">>),
+                                        list_to_binary(Hostname)),
   % keep table specs to facilitate getting, deleting, and scanning items;
   % for items to be added the handler is still required to pass in the specs
   ets:insert(aws, {client, Client}),
   ets:insert(table_specs, {users, {<<"Users">>, {<<"Name">>, <<"S">>}}}),
   ets:insert(table_specs, {rooms, {<<"Rooms">>, {<<"Name">>, <<"S">>}}}),
+  ets:insert(table_specs, {messages, {<<"Messages">>, {<<"Room">>, <<"S">>},
+                                                      {<<"Timestamp">>, <<"S">>}}}),
   {ok, []}.
 
 -else.
